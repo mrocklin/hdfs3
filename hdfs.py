@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 "Main module defining filesystem and file classes"
 import os
-import ctypes
-import sys
 import subprocess
 import warnings
-PY3 = sys.version_info.major > 2
-lib = ctypes.cdll.LoadLibrary('./libhdfs3.so')
-
+import lib
+from lib import ensure_byte, ct
 
 def get_default_host():
     "Try to guess the namenode by looking in this machine's hadoop conf."
@@ -15,19 +12,6 @@ def get_default_host():
                            '') + '/hadoop/conf')
     host = open(os.sep.join([confd, 'masters'])).readlines()[1][:-1]
     return host
-
-
-def ensure_byte(s):
-    "Give strings that ctypes is guaranteed to handle"
-    if PY3:
-        if isinstance(s, str):
-            return s.encode('ascii')
-        elif isinstance(s, bytes):
-            return s
-        else:
-            raise ValueError('Could not convert %s to bytes' % s)
-    else:  # in PY2, strings are fine for ctypes
-        return s
 
 
 def init_kerb():
@@ -116,10 +100,10 @@ class HDFileSystem():
         assert self._handle, "Filesystem not connected"
         fi = self.info(path)
         length = length or fi['size']
-        nblocks = ctypes.c_int(0)
+        nblocks = ct.c_int(0)
         out = lib.hdfsGetFileBlockLocations(self._handle, ensure_byte(path),
-                                ctypes.c_int64(start), ctypes.c_int64(length),
-                                ctypes.byref(nblocks))
+                                ct.c_int64(start), ct.c_int64(length),
+                                ct.byref(nblocks))
         locs = []
         for i in range(nblocks.value):
             block = out[i]
@@ -134,12 +118,12 @@ class HDFileSystem():
         "File information"
         fi = lib.hdfsGetPathInfo(self._handle, ensure_byte(path)).contents
         out = struct_to_dict(fi)
-        lib.hdfsFreeFileInfo(ctypes.byref(fi), 1)
+        lib.hdfsFreeFileInfo(ct.byref(fi), 1)
         return out
     
     def ls(self, path):
-        num = ctypes.c_int(0)
-        fi = lib.hdfsListDirectory(self._handle, ensure_byte(path), ctypes.byref(num))
+        num = ct.c_int(0)
+        fi = lib.hdfsListDirectory(self._handle, ensure_byte(path), ct.byref(num))
         out = [struct_to_dict(fi[i]) for i in range(num.value)]
         lib.hdfsFreeFileInfo(fi, num.value)
         return out
@@ -158,7 +142,7 @@ class HDFileSystem():
         
     def set_replication(self, path, repl):
         out = lib.hdfsSetReplication(self._handle, ensure_byte(path),
-                                     ctypes.c_int16(repl))
+                                     ct.c_int16(repl))
         return out == 0
     
     def mv(self, path1, path2):
@@ -177,12 +161,12 @@ class HDFileSystem():
     def truncate(self, path, pos):
         # Does not appear to ever succeed
         out = lib.hdfsTruncate(self._handle, ensure_byte(path),
-                               ctypes.c_int64(pos), 0)
+                               ct.c_int64(pos), 0)
         return out == 0
     
     def chmod(self, path, mode):
         "Mode in numerical format (give as octal, if convenient)"
-        out = lib.hdfsChmod(self._handle, ensure_byte(path), ctypes.c_short(mode))
+        out = lib.hdfsChmod(self._handle, ensure_byte(path), ct.c_short(mode))
         return out == 0
     
     def chown(self, path, owner, group):
@@ -194,30 +178,6 @@ class HDFileSystem():
 def struct_to_dict(s):
     return dict((name, getattr(s, name)) for (name, p) in s._fields_)
 
-class BlockLocation(ctypes.Structure):
-    _fields_ = [('corrupt', ctypes.c_int),
-                ('numOfNodes', ctypes.c_int),
-                ('hosts', ctypes.POINTER(ctypes.c_char_p)),
-                ('names', ctypes.POINTER(ctypes.c_char_p)),
-                ('topologyPaths', ctypes.POINTER(ctypes.c_char_p)),
-                ('length', ctypes.c_int64),
-                ('offset', ctypes.c_int64)]
-lib.hdfsGetFileBlockLocations.restype = ctypes.POINTER(BlockLocation)
-
-class FileInfo(ctypes.Structure):
-    _fields_ = [('kind', ctypes.c_int8),
-                ('name', ctypes.c_char_p),
-                ('last_mod', ctypes.c_int64),  #time_t, could be 32bit
-                ('size', ctypes.c_int64),
-                ('replication', ctypes.c_short),
-                ('block_size', ctypes.c_int64),
-                ('owner', ctypes.c_char_p),
-                ('group', ctypes.c_char_p),
-                ('permissions', ctypes.c_short),  #view as octal
-                ('last_access', ctypes.c_int64),  #time_t, could be 32bit               
-                ]
-lib.hdfsGetPathInfo.restype = ctypes.POINTER(FileInfo)
-lib.hdfsListDirectory.restype = ctypes.POINTER(FileInfo)
 
 class HDFile():
     _handle = None
@@ -235,7 +195,7 @@ class HDFile():
         m = {'w': 1, 'r': 0, 'a': 1025}[mode]
         self.mode = mode
         out = lib.hdfsOpenFile(self._fs, ensure_byte(path), m, buff,
-                            ctypes.c_short(repl), ctypes.c_int64(offset))
+                            ct.c_short(repl), ct.c_int64(offset))
         if out == 0:
             raise IOError("File open failed")
         self._handle = out
@@ -246,8 +206,8 @@ class HDFile():
         # TODO: read in chunks greater than block size by multiple
         # calls to read
         # TODO: consider tell() versuss filesize to determine bytes available.
-        p = ctypes.create_string_buffer(length)
-        ret = lib.hdfsRead(self._fs, self._handle, p, ctypes.c_int32(length))
+        p = ct.create_string_buffer(length)
+        ret = lib.hdfsRead(self._fs, self._handle, p, ct.c_int32(length))
         if ret >= 0:
             return p.raw[:ret]
         else:
@@ -260,7 +220,7 @@ class HDFile():
         return out
     
     def seek(self, loc):
-        out = lib.hdfsSeek(self._fs, self._handle, ctypes.c_int64(loc))
+        out = lib.hdfsSeek(self._fs, self._handle, ct.c_int64(loc))
         if out == -1:
             raise IOError('Seek Failed')
     

@@ -7,19 +7,19 @@ Install ``hdfs3`` and its dependencies:
 
    $ conda install hdfs3 -c blaze
 
-Import ``hdfs3`` and connect to an HDFS cluster:
+Import ``hdfs3`` and connect to the name node of an HDFS cluster:
 
 .. code-block:: python
 
    >>> from hdfs3 import HDFileSystem
-   >>> hdfs = HDFileSystem(host='localhost', port=8020)
+   >>> hdfs = HDFileSystem()
 
 Write data to file:
 
 .. code-block:: python
 
    >>> with hdfs.open('/tmp/myfile.txt', 'w') as f:
-   ...     f.write('Hello, world!')
+   ...     f.write(b'Hello, world!')
 
 Read data back from file:
 

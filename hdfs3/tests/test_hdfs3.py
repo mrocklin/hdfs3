@@ -622,15 +622,6 @@ def test_chmod(hdfs):
 
 
 @pytest.mark.xfail
-def test_chmod_write(hdfs):
-    hdfs.chmod(a, 'r')
-    hdfs.chmod(a, 'w')
-
-    with hdfs.open(a, 'a') as f:
-        pass
-
-
-@pytest.mark.xfail
 def test_chown(hdfs):
     hdfs.touch(a)
     i = hdfs.info(a)

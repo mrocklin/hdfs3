@@ -24,7 +24,6 @@ as well as a typical Pythonic interface.
    >>> hdfs.cp('/user/data/file.txt', '/user2/data')
 
    >>> with hdfs.open('/user/data/file.txt') as f:
-   ...     f.seek(2000)
    ...     bytes = f.read(1000000)
 
 Refer to the following documentation to get started with `hdfs3`:
